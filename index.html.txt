@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real Estate - NOI Lift Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-accent1': '#18391a',
+                        'brand-accent2': '#304529',
+                        'brand-accent3': '#3a3a3a',
+                        'brand-foreground': '#22311d',
+                        'brand-background': '#e6e6e6'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltiptext {
+            visibility: hidden; width: 200px; background-color: #333; color: white; text-align: center;
+            border-radius: 6px; padding: 8px; position: absolute; z-index: 1; bottom: 125%; left: 50%;
+            margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 12px;
+        }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body class="bg-brand-background min-h-full">
+    <main class="container mx-auto px-4 py-6 max-w-7xl">
+        <!-- Header -->
+        <header class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-brand-foreground">Dojo Real Estate</h1>
+                    <p class="text-brand-accent3">Lease Reimbursement → NOI Lift Calculator</p>
+                </div>
+                <button onclick="resetToDefaults()" class="bg-gray-200 hover:bg-gray-300 text-brand-accent3 px-4 py-2 rounded-lg transition-colors">
+                    Reset to Defaults
+                </button>
+            </div>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-semibold text-brand-foreground mb-4">Property Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="baseRent" class="block text-sm font-medium text-brand-accent3 mb-2">Annual Base Rent ($)</label>
+                    <input type="text" id="baseRent" value="100,000" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-accent1 focus:border-transparent" oninput="calculate()" onblur="formatInputValue(this)">
+                </div>
+                <div>
+                    <label for="vacancyFactor" class="block text-sm font-medium text-brand-accent3 mb-2">
+                        Vacancy Factor (%)
+                        <span class="tooltip">
+                            <span class="text-brand-accent1 cursor-help">ⓘ</span>
+                            <span class="tooltiptext">Percentage of income lost due to actual vacancy or assumed vacancy risk. Lenders typically assume 5%+. I recommend at least a 5% vacancy factor even if your property is fully leased.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="vacancyFactor" value="5" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-accent1 focus:border-transparent" oninput="calculate()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Expenses Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-brand-foreground">Operating Expenses</h2>
+                <button onclick="addExpense()" class="bg-brand-accent1 hover:bg-brand-accent2 text-white px-4 py-2 rounded-lg transition-colors font-medium">
+                    + Add Expense
+                </button>
+            </div>
+            <div id="expensesList" class="space-y-3"></div>
+        </div>
+
+        <!-- Results Table -->
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-brand-foreground">NOI Comparison Analysis</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-brand-accent3">Line Item</th>
+                            <th class="px-6 py-3 text-center text-sm font-medium text-brand-accent3">Current (FSG)</th>
+                            <th class="px-6 py-3 text-center text-sm font-medium text-brand-accent3">Potential (Reimbursable)</th>
+                            <th class="px-6 py-3 text-center text-sm font-medium text-brand-accent3">Difference</th>
+                        </tr>
+                    </thead>
+                    <!-- Use a SINGLE tbody; JS will insert expense rows before the total row -->
+                    <tbody id="tableBody" class="divide-y divide-gray-200">
+                        <!-- Income Section -->
+                        <tr class="bg-blue-50">
+                            <td class="px-6 py-3 font-semibold text-brand-foreground">INCOME</td>
+                            <td class="px-6 py-3"></td>
+                            <td class="px-6 py-3"></td>
+                            <td class="px-6 py-3"></td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-3 text-brand-accent3">Base Rent</td>
+                            <td class="px-6 py-3 text-center" id="currentRent">$0</td>
+                            <td class="px-6 py-3 text-center" id="potentialRent">$0</td>
+                            <td class="px-6 py-3 text-center">$0</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-3 text-brand-accent3">Tenant Reimbursements</td>
+                            <td class="px-6 py-3 text-center">$0</td>
+                            <td class="px-6 py-3 text-center" id="reimbursements">$0</td>
+                            <td class="px-6 py-3 text-center text-green-600" id="reimbursementsDiff">$0</td>
+                        </tr>
+                        <tr class="bg-gray-50 font-semibold">
+                            <td class="px-6 py-3">Potential Gross Income (PGI)</td>
+                            <td class="px-6 py-3 text-center" id="currentPGI">$0</td>
+                            <td class="px-6 py-3 text-center" id="potentialPGI">$0</td>
+                            <td class="px-6 py-3 text-center" id="pgiDiff">$0</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-3 text-brand-accent3">Less: Vacancy</td>
+                            <td class="px-6 py-3 text-center text-red-600" id="currentVacancy">$0</td>
+                            <td class="px-6 py-3 text-center text-red-600" id="potentialVacancy">$0</td>
+                            <td class="px-6 py-3 text-center" id="vacancyDiff">$0</td>
+                        </tr>
+                        <tr class="bg-gray-50 font-semibold">
+                            <td class="px-6 py-3">Effective Gross Income (EGI)</td>
+                            <td class="px-6 py-3 text-center" id="currentEGI">$0</td>
+                            <td class="px-6 py-3 text-center" id="potentialEGI">$0</td>
+                            <td class="px-6 py-3 text-center" id="egiDiff">$0</td>
+                        </tr>
+
+                        <!-- Expenses Section -->
+                        <tr class="bg-red-50">
+                            <td class="px-6 py-3 font-semibold text-brand-foreground">OPERATING EXPENSES</td>
+                            <td class="px-6 py-3"></td>
+                            <td class="px-6 py-3"></td>
+                            <td class="px-6 py-3"></td>
+                        </tr>
+
+                        <!-- Expense rows will be programmatically inserted ABOVE the following total row -->
+                        <tr id="totalExpensesRow" class="bg-gray-50 font-semibold">
+                            <td class="px-6 py-3">Total Operating Expenses</td>
+                            <td class="px-6 py-3 text-center text-red-600" id="currentExpenses">$0</td>
+                            <td class="px-6 py-3 text-center text-red-600" id="potentialExpenses">$0</td>
+                            <td class="px-6 py-3 text-center" id="expensesDiff">$0</td>
+                        </tr>
+
+                        <!-- NOI Section -->
+                        <tr class="bg-green-50 border-t-2 border-brand-accent1">
+                            <td class="px-6 py-4 font-bold text-brand-foreground text-lg">NET OPERATING INCOME (NOI)</td>
+                            <td class="px-6 py-4 text-center font-bold text-lg" id="currentNOI">$0</td>
+                            <td class="px-6 py-4 text-center font-bold text-lg" id="potentialNOI">$0</td>
+                            <td class="px-6 py-4 text-center font-bold text-lg text-green-600" id="noiDiff">$0</td>
+                        </tr>
+                        <tr class="bg-green-50">
+                            <td class="px-6 py-3 text-brand-accent3">NOI Margin (% of EGI)</td>
+                            <td class="px-6 py-3 text-center" id="currentMargin">0%</td>
+                            <td class="px-6 py-3 text-center" id="potentialMargin">0%</td>
+                            <td class="px-6 py-3 text-center" id="marginDiff">0%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- NOI Summary Panel -->
+        <div class="bg-gradient-to-r from-brand-accent1 to-brand-accent2 rounded-lg p-6 text-white mb-6">
+            <h3 class="text-xl font-bold mb-4">NOI Impact Summary</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center">
+                    <p class="text-sm opacity-80 mb-1">Current NOI</p>
+                    <p class="text-2xl font-bold" id="summaryCurrentNOI">$0</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm opacity-80 mb-1">Potential NOI</p>
+                    <p class="text-2xl font-bold" id="summaryPotentialNOI">$0</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm opacity-80 mb-1">NOI Increase</p>
+                    <p class="text-2xl font-bold" id="summaryIncrease">$0 (0%)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Valuation Impact Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <h3 class="text-xl font-bold text-brand-foreground mb-4">Valuation Impact Summary</h3>
+
+            <!-- Cap Rate Inputs -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="text-lg font-semibold text-brand-foreground mb-3">Cap Rate Assumptions</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="lowCapRate" class="block text-sm font-medium text-brand-accent3 mb-2">
+                            Low Cap Rate (%)
+                            <span class="tooltip">
+                                <span class="text-brand-accent1 cursor-help">ⓘ</span>
+                                <span class="tooltiptext">Lower cap rate produces higher property valuation</span>
+                            </span>
+                        </label>
+                        <input type="text" id="lowCapRate" value="7.00%" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-accent1 focus:border-transparent" oninput="calculate()" onblur="formatCapRateInput(this)">
+                    </div>
+                    <div>
+                        <label for="highCapRate" class="block text-sm font-medium text-brand-accent3 mb-2">
+                            High Cap Rate (%)
+                            <span class="tooltip">
+                                <span class="text-brand-accent1 cursor-help">ⓘ</span>
+                                <span class="tooltiptext">Higher cap rate produces lower property valuation</span>
+                            </span>
+                        </label>
+                        <input type="text" id="highCapRate" value="8.00%" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-accent1 focus:border-transparent" oninput="calculate()" onblur="formatCapRateInput(this)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Valuation -->
+            <div class="mb-6">
+                <h4 class="text-lg font-semibold text-brand-foreground mb-3">Current Property Valuation Range</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="text-center bg-blue-50 rounded-lg p-4">
+                        <p class="text-sm text-brand-accent3 mb-1">At <span id="currentLowCapDisplay">7.0%</span> Cap Rate</p>
+                        <p class="text-xl font-bold text-brand-foreground" id="currentHighValue">$0</p>
+                    </div>
+                    <div class="text-center bg-blue-50 rounded-lg p-4">
+                        <p class="text-sm text-brand-accent3 mb-1">At <span id="currentHighCapDisplay">8.0%</span> Cap Rate</p>
+                        <p class="text-xl font-bold text-brand-foreground" id="currentLowValue">$0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Potential Valuation -->
+            <div class="mb-6">
+                <h4 class="text-lg font-semibold text-brand-foreground mb-3">Potential Property Valuation Range</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="text-center bg-green-50 rounded-lg p-4">
+                        <p class="text-sm text-brand-accent3 mb-1">At <span id="potentialLowCapDisplay">7.0%</span> Cap Rate</p>
+                        <p class="text-xl font-bold text-brand-accent1" id="potentialHighValue">$0</p>
+                    </div>
+                    <div class="text-center bg-green-50 rounded-lg p-4">
+                        <p class="text-sm text-brand-accent3 mb-1">At <span id="potentialHighCapDisplay">8.0%</span> Cap Rate</p>
+                        <p class="text-xl font-bold text-brand-accent1" id="potentialLowValue">$0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Value Increase -->
+            <div class="bg-gradient-to-r from-green-100 to-green-200 rounded-lg p-6">
+                <h4 class="text-lg font-bold text-brand-accent1 mb-4 text-center">Property Value Increase Range</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="text-center">
+                        <p class="text-sm text-brand-accent2 mb-1">Conservative Increase</p>
+                        <p class="text-sm text-brand-accent3 mb-1">(At <span id="conservativeCapDisplay">8.0%</span> Cap Rate)</p>
+                        <p class="text-2xl font-bold text-brand-accent1" id="conservativeIncrease">$0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-brand-accent2 mb-1">Optimistic Increase</p>
+                        <p class="text-sm text-brand-accent3 mb-1">(At <span id="optimisticCapDisplay">7.0%</span> Cap Rate)</p>
+                        <p class="text-2xl font-bold text-brand-accent1" id="optimisticIncrease">$0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let expenses = [
+            { name: 'Property Taxes', amount: 8000, reimbursable: false, tenantShare: 100 },
+            { name: 'Property Insurance', amount: 3500, reimbursable: false, tenantShare: 100 },
+            { name: 'Repairs & Maintenance', amount: 4000, reimbursable: false, tenantShare: 100 },
+            { name: 'Property Management', amount: 9000, reimbursable: false, tenantShare: 100 },
+            { name: 'Utilities', amount: 6000, reimbursable: false, tenantShare: 100 },
+            { name: 'Landscaping & Pest Control', amount: 2400, reimbursable: false, tenantShare: 100 },
+            { name: 'Janitorial / Cleaning', amount: 2400, reimbursable: false, tenantShare: 100 },
+            { name: 'Security', amount: 500, reimbursable: false, tenantShare: 100 },
+            { name: 'Accounting', amount: 2000, reimbursable: false, tenantShare: 100 },
+            { name: 'Legal', amount: 1500, reimbursable: false, tenantShare: 100 },
+            { name: 'Software', amount: 1500, reimbursable: false, tenantShare: 100 }
+        ];
+
+        function renderExpenses() {
+            const container = document.getElementById('expensesList');
+            container.innerHTML = '';
+
+            expenses.forEach((expense, index) => {
+                const expenseDiv = document.createElement('div');
+                expenseDiv.className = 'bg-gray-50 p-4 rounded-lg';
+                expenseDiv.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Expense Name</label>
+                            <input type="text" value="${expense.name}" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" onchange="updateExpense(${index}, 'name', this.value)">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Amount ($)</label>
+                            <input type="text" value="${formatNumber(expense.amount)}" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" onchange="updateExpense(${index}, 'amount', parseFormattedNumber(this.value))" onblur="formatInputValue(this)">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Reimbursable
+                                <span class="tooltip">
+                                    <span class="text-brand-accent1 cursor-help">ⓘ</span>
+                                    <span class="tooltiptext">Check if tenant will reimburse this expense</span>
+                                </span>
+                            </label>
+                            <input type="checkbox" ${expense.reimbursable ? 'checked' : ''} class="w-5 h-5 text-brand-accent1" onchange="updateExpense(${index}, 'reimbursable', this.checked)">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tenant Share (%)</label>
+                            <input type="number" value="${expense.tenantShare}" min="0" max="100" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" onchange="updateExpense(${index}, 'tenantShare', parseFloat(this.value) || 0)">
+                        </div>
+                        <div class="flex justify-center">
+                            <button onclick="deleteExpense(${index})" class="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors" aria-label="Delete expense">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(expenseDiv);
+            });
+        }
+
+        function updateExpense(index, field, value) {
+            expenses[index][field] = value;
+            calculate();
+        }
+
+        function addExpense() {
+            expenses.push({ name: 'New Expense', amount: 0, reimbursable: false, tenantShare: 100 });
+            renderExpenses();
+            calculate();
+        }
+
+        function deleteExpense(index) {
+            expenses.splice(index, 1);
+            renderExpenses();
+            calculate();
+        }
+
+        function resetToDefaults() {
+            document.getElementById('baseRent').value = '100,000';
+            document.getElementById('vacancyFactor').value = 5;
+            document.getElementById('lowCapRate').value = '7.00%';
+            document.getElementById('highCapRate').value = '8.00%';
+            expenses = [
+                { name: 'Property Taxes', amount: 8000, reimbursable: false, tenantShare: 100 },
+                { name: 'Property Insurance', amount: 3500, reimbursable: false, tenantShare: 100 },
+                { name: 'Repairs & Maintenance', amount: 4000, reimbursable: false, tenantShare:100 },
+                { name: 'Property Management', amount: 9000, reimbursable: false, tenantShare: 100 },
+                { name: 'Utilities', amount: 6000, reimbursable: false, tenantShare: 100 },
+                { name: 'Landscaping & Pest Control', amount: 2400, reimbursable: false, tenantShare: 100 },
+                { name: 'Janitorial / Cleaning', amount: 2400, reimbursable: false, tenantShare: 100 },
+                { name: 'Security', amount: 500, reimbursable: false, tenantShare: 100 },
+                { name: 'Accounting', amount: 2000, reimbursable: false, tenantShare: 100 },
+                { name: 'Legal', amount: 1500, reimbursable: false, tenantShare: 100 },
+                { name: 'Software', amount: 1500, reimbursable: false, tenantShare: 100 }
+            ];
+            renderExpenses();
+            calculate();
+        }
+
+        function formatCurrency(amount) {
+            const absAmount = Math.abs(amount);
+            const formatted = new Intl.NumberFormat('en-US', {
+                style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0
+            }).format(absAmount);
+            return amount < 0 ? `(${formatted})` : formatted;
+        }
+        function formatNumber(num) { return new Intl.NumberFormat('en-US').format(num); }
+        function parseFormattedNumber(str) { return parseFloat(str.replace(/,/g, '')) || 0; }
+        function formatInputValue(input) {
+            const value = parseFormattedNumber(input.value);
+            if (!isNaN(value) && value !== 0) input.value = formatNumber(value);
+        }
+        function formatCapRateInput(input) {
+            let value = parseFloat(input.value.replace('%', '')) || 0;
+            if (value > 0) input.value = value.toFixed(2) + '%';
+        }
+        function parseCapRate(str) { return parseFloat(str.replace('%', '')) || 0; }
+
+        function calculate() {
+            const baseRent = parseFormattedNumber(document.getElementById('baseRent').value);
+            const vacancyFactor = parseFloat(document.getElementById('vacancyFactor').value) || 0;
+
+            // Calculate reimbursements
+            let totalReimbursements = 0;
+            expenses.forEach(expense => {
+                if (expense.reimbursable) totalReimbursements += expense.amount * (expense.tenantShare / 100);
+            });
+
+            // Current scenario (FSG)
+            const currentPGI = baseRent;
+            const currentVacancy = currentPGI * (vacancyFactor / 100);
+            const currentEGI = currentPGI - currentVacancy;
+            const currentTotalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+            const currentNOI = currentEGI - currentTotalExpenses;
+
+            // Potential scenario (with reimbursements)
+            const potentialPGI = baseRent + totalReimbursements;
+            const potentialVacancy = potentialPGI * (vacancyFactor / 100);
+            const potentialEGI = potentialPGI - potentialVacancy;
+            const potentialTotalExpenses = currentTotalExpenses;
+            const potentialNOI = potentialEGI - potentialTotalExpenses;
+
+            // Update income section
+            document.getElementById('currentRent').textContent = formatCurrency(baseRent);
+            document.getElementById('potentialRent').textContent = formatCurrency(baseRent);
+            document.getElementById('reimbursements').textContent = formatCurrency(totalReimbursements);
+            document.getElementById('reimbursementsDiff').textContent = formatCurrency(totalReimbursements);
+
+            document.getElementById('currentPGI').textContent = formatCurrency(currentPGI);
+            document.getElementById('potentialPGI').textContent = formatCurrency(potentialPGI);
+            document.getElementById('pgiDiff').textContent = formatCurrency(potentialPGI - currentPGI);
+
+            document.getElementById('currentVacancy').textContent = formatCurrency(-currentVacancy);
+            document.getElementById('potentialVacancy').textContent = formatCurrency(-potentialVacancy);
+            document.getElementById('vacancyDiff').textContent = formatCurrency(currentVacancy - potentialVacancy);
+
+            document.getElementById('currentEGI').textContent = formatCurrency(currentEGI);
+            document.getElementById('potentialEGI').textContent = formatCurrency(potentialEGI);
+            document.getElementById('egiDiff').textContent = formatCurrency(potentialEGI - currentEGI);
+
+            // Update expense rows (insert before total row)
+            const tbody = document.getElementById('tableBody');
+            const anchor = document.getElementById('totalExpensesRow');
+            // remove old
+            document.querySelectorAll('.expense-row').forEach(r => r.remove());
+            expenses.forEach(expense => {
+                const row = document.createElement('tr');
+                row.className = 'expense-row';
+                const currentExpense = expense.amount;
+                const potentialExpense = expense.amount; // expense is always deducted
+                const difference = 0; // handled via income
+                row.innerHTML = `
+                    <td class="px-6 py-3 text-gray-700">${expense.name}</td>
+                    <td class="px-6 py-3 text-center text-red-600">${formatCurrency(-currentExpense)}</td>
+                    <td class="px-6 py-3 text-center text-red-600">${formatCurrency(-potentialExpense)}</td>
+                    <td class="px-6 py-3 text-center">${formatCurrency(difference)}</td>
+                `;
+                tbody.insertBefore(row, anchor);
+            });
+
+            // Update totals
+            document.getElementById('currentExpenses').textContent = formatCurrency(-currentTotalExpenses);
+            document.getElementById('potentialExpenses').textContent = formatCurrency(-potentialTotalExpenses);
+            document.getElementById('expensesDiff').textContent = formatCurrency(0);
+
+            // Update NOI
+            document.getElementById('currentNOI').textContent = formatCurrency(currentNOI);
+            document.getElementById('potentialNOI').textContent = formatCurrency(potentialNOI);
+            document.getElementById('noiDiff').textContent = formatCurrency(potentialNOI - currentNOI);
+
+            // Update margins
+            const currentMargin = currentEGI > 0 ? (currentNOI / currentEGI * 100) : 0;
+            const potentialMargin = potentialEGI > 0 ? (potentialNOI / potentialEGI * 100) : 0;
+            document.getElementById('currentMargin').textContent = currentMargin.toFixed(1) + '%';
+            document.getElementById('potentialMargin').textContent = potentialMargin.toFixed(1) + '%';
+            document.getElementById('marginDiff').textContent = (potentialMargin - currentMargin).toFixed(1) + '%';
+
+            // Summary
+            document.getElementById('summaryCurrentNOI').textContent = formatCurrency(currentNOI);
+            document.getElementById('summaryPotentialNOI').textContent = formatCurrency(potentialNOI);
+            const noiIncrease = potentialNOI - currentNOI;
+            const noiIncreasePercent = currentNOI > 0 ? (noiIncrease / currentNOI * 100) : 0;
+            let increaseText = '';
+            increaseText += (noiIncrease >= 0 ? '+' : '') + formatCurrency(noiIncrease);
+            increaseText += ' / ' + (noiIncreasePercent >= 0 ? '+' : '') + noiIncreasePercent.toFixed(1) + '%';
+            document.getElementById('summaryIncrease').textContent = increaseText;
+
+            // Valuations
+            const lowCapRate = parseCapRate(document.getElementById('lowCapRate').value) || 7.0;
+            const highCapRate = parseCapRate(document.getElementById('highCapRate').value) || 8.0;
+            const currentHighValue = currentNOI > 0 ? currentNOI / (lowCapRate / 100) : 0;
+            const currentLowValue  = currentNOI > 0 ? currentNOI / (highCapRate / 100) : 0;
+            const potentialHighValue = potentialNOI > 0 ? potentialNOI / (lowCapRate / 100) : 0;
+            const potentialLowValue  = potentialNOI > 0 ? potentialNOI / (highCapRate / 100) : 0;
+            const conservativeIncrease = potentialLowValue - currentLowValue;
+            const optimisticIncrease   = potentialHighValue - currentHighValue;
+
+            // Update cap rate displays
+            document.getElementById('currentLowCapDisplay').textContent = lowCapRate.toFixed(1) + '%';
+            document.getElementById('currentHighCapDisplay').textContent = highCapRate.toFixed(1) + '%';
+            document.getElementById('potentialLowCapDisplay').textContent = lowCapRate.toFixed(1) + '%';
+            document.getElementById('potentialHighCapDisplay').textContent = highCapRate.toFixed(1) + '%';
+            document.getElementById('conservativeCapDisplay').textContent = highCapRate.toFixed(1) + '%';
+            document.getElementById('optimisticCapDisplay').textContent = lowCapRate.toFixed(1) + '%';
+
+            // Values
+            document.getElementById('currentHighValue').textContent = formatCurrency(currentHighValue);
+            document.getElementById('currentLowValue').textContent  = formatCurrency(currentLowValue);
+            document.getElementById('potentialHighValue').textContent = formatCurrency(potentialHighValue);
+            document.getElementById('potentialLowValue').textContent  = formatCurrency(potentialLowValue);
+            document.getElementById('conservativeIncrease').textContent = (conservativeIncrease >= 0 ? '+' : '') + formatCurrency(conservativeIncrease);
+            document.getElementById('optimisticIncrease').textContent   = (optimisticIncrease >= 0 ? '+' : '') + formatCurrency(optimisticIncrease);
+        }
+
+        // Initialize
+        renderExpenses();
+        calculate();
+    </script>
+    <!-- IMPORTANT: Removed Cloudflare /cdn-cgi script that causes the original error. -->
+</body>
+</html>
